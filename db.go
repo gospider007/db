@@ -10,13 +10,12 @@ import (
 )
 
 type Client[T any] struct {
-	orderKey  *chanx.Client[dbKey]
-	mapKey    map[[16]byte]dbData[T]
-	lock      sync.RWMutex
-	timeOut   time.Duration
-	ctx       context.Context
-	cnl       context.CancelFunc
-	afterTime *time.Timer
+	orderKey *chanx.Client[dbKey]
+	mapKey   map[[16]byte]dbData[T]
+	lock     sync.RWMutex
+	timeOut  time.Duration
+	ctx      context.Context
+	cnl      context.CancelFunc
 }
 type dbKey struct {
 	key [16]byte
@@ -37,12 +36,11 @@ func NewClient[T any](preCtx context.Context, timeOuts ...time.Duration) *Client
 	}
 	ctx, cnl := context.WithCancel(preCtx)
 	client := &Client[T]{
-		ctx:       ctx,
-		cnl:       cnl,
-		timeOut:   timeOut,
-		mapKey:    make(map[[16]byte]dbData[T]),
-		orderKey:  chanx.NewClient[dbKey](ctx),
-		afterTime: time.NewTimer(0),
+		ctx:      ctx,
+		cnl:      cnl,
+		timeOut:  timeOut,
+		mapKey:   make(map[[16]byte]dbData[T]),
+		orderKey: chanx.NewClient[dbKey](ctx),
 	}
 	go client.run()
 	return client
@@ -50,6 +48,12 @@ func NewClient[T any](preCtx context.Context, timeOuts ...time.Duration) *Client
 
 func (obj *Client[T]) run() {
 	defer obj.Close()
+	var afterTime *time.Timer
+	defer func() {
+		if afterTime != nil {
+			afterTime.Stop()
+		}
+	}()
 	for {
 		select {
 		case <-obj.ctx.Done():
@@ -58,13 +62,17 @@ func (obj *Client[T]) run() {
 			return
 		case orderVal := <-obj.orderKey.Chan():
 			if awaitTime := obj.timeOut - (time.Now().Sub(orderVal.ttl)); awaitTime > 0 { //判断睡眠时间
-				obj.afterTime.Reset(awaitTime)
+				if afterTime == nil {
+					afterTime = time.NewTimer(awaitTime)
+				} else {
+					afterTime.Reset(awaitTime)
+				}
 				select {
 				case <-obj.ctx.Done():
 					return
 				case <-obj.orderKey.Ctx().Done():
 					return
-				case <-obj.afterTime.C:
+				case <-afterTime.C:
 				}
 			}
 			obj.lock.Lock()
@@ -75,7 +83,6 @@ func (obj *Client[T]) run() {
 }
 func (obj *Client[T]) Close() {
 	obj.cnl()
-	obj.afterTime.Stop()
 }
 func (obj *Client[T]) Put(key [16]byte, value T) error {
 	nowTime := time.Now()
