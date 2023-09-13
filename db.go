@@ -1,107 +1,85 @@
 package db
 
 import (
-	"context"
-	"errors"
-	"sync"
+	"bytes"
+	"encoding/gob"
 	"time"
 
-	"gitee.com/baixudong/chanx"
+	"gitee.com/baixudong/tools"
+	badger "github.com/dgraph-io/badger/v4"
 )
 
-type Client[T any] struct {
-	orderKey *chanx.Client[dbKey]
-	mapKey   map[[16]byte]dbData[T]
-	lock     sync.RWMutex
-	timeOut  time.Duration
-	ctx      context.Context
-	cnl      context.CancelFunc
-}
-type dbKey struct {
-	key [16]byte
-	ttl time.Time
-}
-type dbData[T any] struct {
-	data T
-	ttl  time.Time
+type ClientOption struct {
+	Dir string
+	Ttl time.Duration
 }
 
-// 缓存数据
-func NewClient[T any](preCtx context.Context, timeOuts ...time.Duration) *Client[T] {
-	var timeOut time.Duration
-	if len(timeOuts) > 0 {
-		timeOut = timeOuts[0]
-	} else {
-		timeOut = time.Second * 60 * 30
+func NewClient(option ClientOption) (*Client, error) {
+	opt := badger.DefaultOptions(option.Dir)
+	if option.Dir == "" {
+		opt = opt.WithInMemory(true)
 	}
-	ctx, cnl := context.WithCancel(preCtx)
-	client := &Client[T]{
-		ctx:      ctx,
-		cnl:      cnl,
-		timeOut:  timeOut,
-		mapKey:   make(map[[16]byte]dbData[T]),
-		orderKey: chanx.NewClient[dbKey](ctx),
-	}
-	go client.run()
-	return client
+	db, err := badger.Open(opt)
+	return &Client{db: db, ttl: option.Ttl}, err
 }
 
-func (obj *Client[T]) run() {
-	defer obj.Close()
-	var afterTime *time.Timer
-	defer func() {
-		if afterTime != nil {
-			afterTime.Stop()
-		}
-	}()
-	for {
-		select {
-		case <-obj.ctx.Done():
-			return
-		case <-obj.orderKey.Ctx().Done():
-			return
-		case orderVal := <-obj.orderKey.Chan():
-			if awaitTime := obj.timeOut - (time.Now().Sub(orderVal.ttl)); awaitTime > 0 { //判断睡眠时间
-				if afterTime == nil {
-					afterTime = time.NewTimer(awaitTime)
-				} else {
-					afterTime.Reset(awaitTime)
-				}
-				select {
-				case <-obj.ctx.Done():
-					return
-				case <-obj.orderKey.Ctx().Done():
-					return
-				case <-afterTime.C:
-				}
-			}
-			obj.lock.Lock()
-			delete(obj.mapKey, orderVal.key)
-			obj.lock.Unlock()
-		}
+type Client struct {
+	db  *badger.DB
+	ttl time.Duration
+}
+type SetOption struct {
+	Ttl time.Duration
+}
+
+func (obj *Client) Set(key []byte, data any, options ...SetOption) error {
+	var option SetOption
+	if len(options) > 0 {
+		option = options[0]
 	}
+	var val []byte
+	switch con := data.(type) {
+	case []byte:
+		val = con
+	case string:
+		val = tools.StringToBytes(con)
+	default:
+		b := bytes.NewBuffer(nil)
+		if err := gob.NewEncoder(b).Encode(con); err != nil {
+			return err
+		}
+		val = b.Bytes()
+	}
+	if option.Ttl == 0 {
+		option.Ttl = obj.ttl
+	}
+	return obj.db.Update(func(txn *badger.Txn) error {
+		if option.Ttl > 0 {
+			return txn.SetEntry(badger.NewEntry(key, val).WithTTL(option.Ttl))
+		} else {
+			return txn.SetEntry(badger.NewEntry(key, val))
+		}
+	})
 }
-func (obj *Client[T]) Close() {
-	obj.cnl()
+
+func (obj *Client) Get(key []byte) (val []byte, err error) {
+	err = obj.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if err != nil {
+			return err
+		}
+		val, err = item.ValueCopy(nil)
+		return err
+	})
+	return
 }
-func (obj *Client[T]) Put(key [16]byte, value T) error {
-	nowTime := time.Now()
-	if err := obj.orderKey.Add(dbKey{key: key, ttl: nowTime}); err != nil {
+
+func (obj *Client) GetWithType(key []byte, t any) (err error) {
+	val, err := obj.Get(key)
+	if err != nil {
 		return err
 	}
-	obj.lock.Lock()
-	defer obj.lock.Unlock()
-	obj.mapKey[key] = dbData[T]{data: value, ttl: nowTime}
-	return nil
+	return gob.NewDecoder(bytes.NewBuffer(val)).Decode(t)
 }
-func (obj *Client[T]) Get(key [16]byte) (value T, err error) {
-	obj.lock.RLock()
-	mapVal, ok := obj.mapKey[key]
-	obj.lock.RUnlock()
-	if ok {
-		value = mapVal.data
-	} else {
-		err = errors.New("not found")
-	}
-	return
+func (obj *Client) Close() error {
+	return obj.db.Close()
 }
