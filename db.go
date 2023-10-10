@@ -19,6 +19,7 @@ func NewClient(option ClientOption) (*Client, error) {
 	if option.Dir == "" {
 		opt = opt.WithInMemory(true)
 	}
+	opt.WithLogger(nil)
 	db, err := badger.Open(opt)
 	return &Client{db: db, ttl: option.Ttl}, err
 }

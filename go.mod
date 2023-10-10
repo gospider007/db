@@ -3,7 +3,7 @@ module gitee.com/baixudong/db
 go 1.21.0
 
 require (
-	gitee.com/baixudong/tools v0.0.0-20230905085451-d080a77e3eb5
+	gitee.com/baixudong/tools v0.0.0-20230926010219-77f29cbf5935
 	github.com/dgraph-io/badger/v4 v4.2.0
 )
 
@@ -27,13 +27,13 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/tidwall/gjson v1.16.0 // indirect
+	github.com/tidwall/gjson v1.17.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/image v0.12.0 // indirect
-	golang.org/x/net v0.15.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/image v0.13.0 // indirect
+	golang.org/x/net v0.16.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 )
