@@ -4,7 +4,7 @@ go 1.21.3
 
 require (
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/gospider007/tools v0.0.0-20231015122431-2acd695704d6
+	github.com/gospider007/tools v0.0.0-20231024115950-be51fa815fcd
 )
 
 require (
@@ -19,8 +19,8 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/gospider007/kinds v0.0.0-20231015025159-69ab7d8d9b94 // indirect
-	github.com/gospider007/re v0.0.0-20231015023348-717c984874af // indirect
+	github.com/gospider007/kinds v0.0.0-20231024093643-7a4424f2d30e // indirect
+	github.com/gospider007/re v0.0.0-20231024115818-adfd03636256 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect

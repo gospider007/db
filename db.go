@@ -62,7 +62,7 @@ func (obj *Client) Set(key []byte, data any, options ...SetOption) error {
 	})
 }
 
-func (obj *Client) Get(key []byte) (val []byte, err error) {
+func (obj *Client) Get(key []byte, t ...any) (val []byte, err error) {
 	err = obj.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil {
@@ -71,15 +71,10 @@ func (obj *Client) Get(key []byte) (val []byte, err error) {
 		val, err = item.ValueCopy(nil)
 		return err
 	})
-	return
-}
-
-func (obj *Client) GetWithType(key []byte, t any) (err error) {
-	val, err := obj.Get(key)
-	if err != nil {
-		return err
+	if err == nil && len(t) > 0 {
+		err = gob.NewDecoder(bytes.NewBuffer(val)).Decode(t[0])
 	}
-	return gob.NewDecoder(bytes.NewBuffer(val)).Decode(t)
+	return
 }
 func (obj *Client) Close() error {
 	return obj.db.Close()
