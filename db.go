@@ -12,14 +12,10 @@ import (
 	"github.com/gospider007/tools"
 )
 
-type FS struct {
-	FS  *embed.FS
-	Dir string
-}
 type ClientOption struct {
 	TTL time.Duration
 	Dir string
-	FS  FS
+	FS  *embed.FS
 }
 
 func NewClient(ctx context.Context, option ClientOption) (*Client, error) {
@@ -57,7 +53,7 @@ type Client struct {
 	ctx  context.Context
 	cnl  context.CancelFunc
 	dir  string
-	fs   FS
+	fs   *embed.FS
 }
 
 func (obj *Client) run() {
@@ -113,23 +109,26 @@ func (obj *Client) Set(key string, data any) error {
 
 func (obj *Client) Get(key string, data any) (bool, error) {
 	key = tools.Hex(tools.Md5(key))
-	if obj.dir != "" && !tools.PathExist(tools.PathJoin(obj.dir, key)) {
-		b, err := os.ReadFile(tools.PathJoin(obj.dir, key))
-		if err == nil {
-			return true, gob.NewDecoder(bytes.NewBuffer(b)).Decode(data)
+	if obj.fs != nil {
+		b, err := obj.fs.ReadFile(obj.dir + "/" + key)
+		if err != nil {
+			return false, nil
 		}
-	}
-	if obj.fs.FS != nil && obj.fs.Dir != "" {
-		b, err := obj.fs.FS.ReadFile(obj.fs.Dir + "/" + key)
-		if err == nil {
-			return true, gob.NewDecoder(bytes.NewBuffer(b)).Decode(data)
-		}
-	}
-	b, ok := obj.get(key)
-	if ok {
+
 		return true, gob.NewDecoder(bytes.NewBuffer(b)).Decode(data)
+	} else if obj.dir != "" {
+		b, err := os.ReadFile(tools.PathJoin(obj.dir, key))
+		if err != nil {
+			return false, nil
+		}
+		return true, gob.NewDecoder(bytes.NewBuffer(b)).Decode(data)
+	} else {
+		b, ok := obj.get(key)
+		if ok {
+			return true, gob.NewDecoder(bytes.NewBuffer(b)).Decode(data)
+		}
+		return false, nil
 	}
-	return false, nil
 }
 func (obj *Client) Close() {
 	obj.cnl()
