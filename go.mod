@@ -11,7 +11,7 @@ require (
 	github.com/gospider007/re v0.0.0-20250815031101-a57caeff73bf // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/minio/minlz v1.0.1 // indirect
-	golang.org/x/image v0.31.0 // indirect
-	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/image v0.32.0 // indirect
+	golang.org/x/net v0.46.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 )
