@@ -24,20 +24,20 @@ func NewClient(ctx context.Context, option ClientOption) (*Client, error) {
 	}
 	context, cancel := context.WithCancel(ctx)
 	client := &Client{
-		ttl: int64(option.TTL),
+		ttl: option.TTL,
 		ctx: context,
 		cnl: cancel,
 		dir: option.Dir,
 		fs:  option.FS,
 	}
-
-	if client.dir != "" && !tools.PathExist(client.dir) {
-		err := os.MkdirAll(client.dir, 0777)
-		if err != nil {
-			return nil, err
+	if client.dir != "" {
+		if !tools.PathExist(client.dir) {
+			err := os.MkdirAll(client.dir, 0777)
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
-	if client.ttl > 0 && client.dir != "" {
+	} else {
 		go client.run()
 	}
 	return client, nil
@@ -45,10 +45,11 @@ func NewClient(ctx context.Context, option ClientOption) (*Client, error) {
 
 type rawData struct {
 	data []byte
-	time int64
+	time time.Time
+	ttl  time.Duration
 }
 type Client struct {
-	ttl  int64
+	ttl  time.Duration
 	data sync.Map
 	ctx  context.Context
 	cnl  context.CancelFunc
@@ -64,7 +65,7 @@ func (obj *Client) run() {
 		default:
 			obj.data.Range(func(key, value any) bool {
 				val := value.(rawData)
-				if time.Now().Unix()-val.time > obj.ttl {
+				if val.ttl > 0 && time.Since(val.time) > val.ttl {
 					obj.data.Delete(key)
 				}
 				return true
@@ -78,10 +79,15 @@ func (obj *Client) run() {
 	}
 }
 
-func (obj *Client) set(key string, data []byte) {
+func (obj *Client) set(key string, data []byte, ttls ...time.Duration) {
+	var ttl time.Duration
+	if len(ttls) > 0 {
+		ttl = ttls[0]
+	}
 	obj.data.Store(key, rawData{
 		data: data,
-		time: time.Now().Unix(),
+		time: time.Now(),
+		ttl:  ttl,
 	})
 }
 
@@ -92,7 +98,7 @@ func (obj *Client) get(key string) ([]byte, bool) {
 	}
 	return val.(rawData).data, true
 }
-func (obj *Client) Set(key string, data any) error {
+func (obj *Client) Set(key string, data any, ttls ...time.Duration) error {
 	key = tools.Hex(tools.Md5(key))
 	b := bytes.NewBuffer(nil)
 	err := gob.NewEncoder(b).Encode(data)
@@ -102,7 +108,7 @@ func (obj *Client) Set(key string, data any) error {
 	if obj.dir != "" {
 		return os.WriteFile(tools.PathJoin(obj.dir, key), b.Bytes(), 0777)
 	} else {
-		obj.set(key, b.Bytes())
+		obj.set(key, b.Bytes(), ttls...)
 	}
 	return nil
 }
